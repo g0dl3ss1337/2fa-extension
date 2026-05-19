@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <h3>🔐 My 2FA Authenticator</h3>
+    <button id="toggle-add-btn" title="Add new key">+</button>
+  </div>
+
+  <div id="add-form" class="add-form hidden">
+    <input type="text" id="new-name" placeholder="Name (e.g., EpicGames)">
+    <input type="text" id="new-secret" placeholder="Secret Key (Base32)">
+    <button id="save-btn">Save</button>
+  </div>
+
+  <div id="auth-list" class="auth-list"></div>
+
+  <script src="otplib-browser.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
