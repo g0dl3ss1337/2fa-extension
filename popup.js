@@ -15,7 +15,7 @@ saveBtn.addEventListener('click', () => {
     let secret = document.getElementById('new-secret').value.trim().toUpperCase().replace(/\s/g, '');
 
     if (!name || !secret) {
-        alert('Заполните все поля!');
+        alert('Fill in all fields!');
         return;
     }
 
@@ -97,10 +97,14 @@ function initList() {
                 navigator.clipboard.writeText(cleanCode);
 
                 const oldColor = codeSpan.style.color;
+                
                 codeSpan.textContent = 'Copied!';
                 codeSpan.style.color = '#a6e3a1';
 
-                setTimeout(() => { codeSpan.style.color = oldColor; }, 800);
+                setTimeout(() => { 
+                    codeSpan.style.color = oldColor; 
+                    codeSpan.textContent = '--- ---'; 
+                }, 3000);
             });
         });
 
