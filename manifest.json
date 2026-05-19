@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "My 2FA Authenticator",
-  "version": "1.1",
+  "version": "1.2",
   "description": "A simple 2FA authenticator with timers and copy functionality.",
   "permissions": ["storage"],
 
@@ -19,5 +19,9 @@
       "32": "icons/icon32.png",
       "48": "icons/icon48.png"
     }
+  },
+
+  "background": {
+    "service_worker": "background.js"
   }
 }
