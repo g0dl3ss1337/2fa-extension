@@ -340,7 +340,7 @@ body {
 }
 
 .settings-panel.visible {
-  max-height: 330px;
+  max-height: 350px;
   opacity: 1;
   padding: 12px;
   margin-bottom: 12px;
