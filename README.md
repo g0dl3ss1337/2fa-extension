@@ -108,10 +108,15 @@ The settings page in the White theme.
 ## 🚀 What’s New in This Version
 
 - Master password setup on first launch
+- Password strength feedback while creating your master key
 - PBKDF2 + AES-GCM encryption for stored accounts
-- Password unlock screen for returning users
+- Unlock screen for returning users
 - Lock button to hide codes and clear the session key
-- Service worker background logic for secure session storage
+- Search across saved codes and interactive edit/delete menu
+- Add code flow with optional advanced settings
+- Theme selection plus export/import settings
+- OLED Black and White theme support
+- Background service worker for secure session handling
 
 ---
 
@@ -158,7 +163,7 @@ The settings page in the White theme.
 - `background.js` — service worker handling session password storage
 - `icons/` — extension icons
 - `preview/` — screenshot folder
-- `preview/preview_1.png`, `preview/preview_1_1.png`, `preview/preview_1_2.png`, `preview/preview_1_3.png`, `preview/preview_1_4.png`, `preview/preview_1_5.png`, `preview/preview_2.png`, `preview/preview_3.png`, `preview/preview_4.png`, `preview/preview_4_1.png`, `preview/preview_5.png`, `preview/preview_5_1.png`, `preview/preview_6.png`, `preview/preview_7.png`, `preview/preview_8.png`, `preview/preview_8_1.png`, `preview/preview_8_2.png` — interface previews
+
 
 ---
 
@@ -276,10 +281,15 @@ Create quick access to your 2FA codes and keep your secrets protected.
 ## 🚀 Новинки в этой версии
 
 - Создание мастер-пароля при первом запуске
-- Шифрование аккаунтов через PBKDF2 + AES-GCM
-- Экран разблокировки для повторных запусков
-- Кнопка блокировки для скрытия кодов и очистки сессии
-- Фоновый service worker для безопасного хранения пароля в сессии
+- Индикатор силы пароля во время настройки
+- Шифрование аккаунтов PBKDF2 + AES-GCM
+- Экран разблокировки для возвращающихся пользователей
+- Кнопка блокировки, скрывающая коды и очищающая сессионный ключ
+- Поиск по кодам и меню редактирования/удаления
+- Добавление кода с опциональной вкладкой advanced
+- Выбор темы и импорт/экспорт настроек
+- Темы OLED Black и White
+- Фоновый service worker для безопасной сессии
 
 ---
 
@@ -326,7 +336,6 @@ Create quick access to your 2FA codes and keep your secrets protected.
 - `background.js` — сервис-воркер для хранения пароля в сессии
 - `icons/` — иконки расширения
 - `preview/` — папка со скриншотами
-- `preview/preview_1.png`, `preview/preview_1_1.png`, `preview/preview_1_2.png`, `preview/preview_1_3.png`, `preview/preview_1_4.png`, `preview/preview_1_5.png`, `preview/preview_2.png`, `preview/preview_3.png`, `preview/preview_4.png`, `preview/preview_4_1.png`, `preview/preview_5.png`, `preview/preview_5_1.png`, `preview/preview_6.png`, `preview/preview_7.png`, `preview/preview_8.png`, `preview/preview_8_1.png`, `preview/preview_8_2.png` — превью интерфейса
 
 ---
 
