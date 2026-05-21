@@ -1,4 +1,4 @@
-# My 2FA Authenticator
+﻿# [EN] My 2FA Authenticator
 
 **My 2FA Authenticator** is a browser extension that stores your 2FA secrets securely and generates one-time TOTP codes directly in the popup.
 
@@ -23,30 +23,85 @@
 
 The setup screen appears on first launch, prompting the user to create a master password.
 
+### 1.1. Weak master key demonstration
+![Weak master key demonstration](preview/preview_1_1.png)
+
+Shows a weak password strength indicator for the master key.
+
+### 1.2. Fair master key demonstration
+![Fair master key demonstration](preview/preview_1_2.png)
+
+Shows a fair password strength indicator during setup.
+
+### 1.3. Good master key demonstration
+![Good master key demonstration](preview/preview_1_3.png)
+
+Shows a good password strength indicator during setup.
+
+### 1.4. Strong master key demonstration
+![Strong master key demonstration](preview/preview_1_4.png)
+
+Shows a strong password strength indicator during setup.
+
+### 1.5. Strong master key confirmation
+![Strong master key confirmation](preview/preview_1_5.png)
+
+Another view of the strong password strength state.
+
 ### 2. Unlock screen
 ![Unlock screen](preview/preview_2.png)
 
 Enter the master password to unlock previously saved accounts.
 
-### 3. Empty state on first run
-![Empty state on first run](preview/preview_3.png)
+### 3. First launch and empty state
+![First launch and empty state](preview/preview_3.png)
 
 The main popup shows an empty state before any accounts are added.
 
-### 4. Code display
-![Code display](preview/preview_4.png)
+### 4. Add code screen (without advanced open)
+![Add code screen](preview/preview_4.png)
 
-View a generated TOTP code with the countdown timer.
+Add a new account with a simple code entry screen.
 
-### 5. Code interaction menu
-![Code interaction menu](preview/preview_5.png)
+### 4.1. Add code screen with advanced open
+![Add code screen advanced](preview/preview_4_1.png)
 
-Open the interaction menu to edit or delete a saved account.
+Shows the add-code screen with the advanced section expanded.
+
+### 5. Code view without interaction menu
+![Code view without interaction menu](preview/preview_5.png)
+
+View a generated TOTP code in the main list.
+
+### 5.1. Code view with interaction menu
+![Code view with interaction menu](preview/preview_5_1.png)
+
+Shows the interaction menu for edit and delete actions.
 
 ### 6. Copied code state
 ![Copied code state](preview/preview_6.png)
 
 The popup shows the state after copying a code to the clipboard.
+
+### 7. Search open
+![Search open](preview/preview_7.png)
+
+Search across saved codes in the popup.
+
+### 8. Settings with original theme
+![Settings original theme](preview/preview_8.png)
+
+The settings page shows theme selection and export/import.
+
+### 8.1. Settings with OLED Black theme
+![Settings OLED Black theme](preview/preview_8_1.png)
+
+The settings page in the OLED Black theme.
+
+### 8.2. Settings with White theme
+![Settings White theme](preview/preview_8_2.png)
+
+The settings page in the White theme.
 
 ---
 
@@ -103,7 +158,7 @@ The popup shows the state after copying a code to the clipboard.
 - `background.js` — service worker handling session password storage
 - `icons/` — extension icons
 - `preview/` — screenshot folder
-- `preview/preview_1.png`, `preview/preview_2.png`, `preview/preview_3.png`, `preview/preview_4.png`, `preview/preview_5.png`, `preview/preview_6.png` — interface previews
+- `preview/preview_1.png`, `preview/preview_1_1.png`, `preview/preview_1_2.png`, `preview/preview_1_3.png`, `preview/preview_1_4.png`, `preview/preview_1_5.png`, `preview/preview_2.png`, `preview/preview_3.png`, `preview/preview_4.png`, `preview/preview_4_1.png`, `preview/preview_5.png`, `preview/preview_5_1.png`, `preview/preview_6.png`, `preview/preview_7.png`, `preview/preview_8.png`, `preview/preview_8_1.png`, `preview/preview_8_2.png` — interface previews
 
 ---
 
@@ -111,7 +166,7 @@ Create quick access to your 2FA codes and keep your secrets protected.
 
 ---
 
-# My 2FA Authenticator
+# [RU] My 2FA Authenticator
 
 **My 2FA Authenticator** — это браузерное расширение, которое безопасно хранит ваши 2FA-секреты и генерирует одноразовые TOTP-коды прямо в popup.
 
@@ -136,30 +191,85 @@ Create quick access to your 2FA codes and keep your secrets protected.
 
 Экран настройки появляется при первом запуске и предлагает создать мастер-пароль.
 
+### 1.1. Демонстрация мастера ключа weak уровня
+![Демонстрация мастера ключа weak уровня](preview/preview_1_1.png)
+
+Показывает индикатор слабого уровня пароля при вводе мастер-ключа.
+
+### 1.2. Демонстрация мастера ключа fair уровня
+![Демонстрация мастера ключа fair уровня](preview/preview_1_2.png)
+
+Показывает индикатор пароля уровня fair во время настройки.
+
+### 1.3. Демонстрация мастера ключа good уровня
+![Демонстрация мастера ключа good уровня](preview/preview_1_3.png)
+
+Показывает индикатор пароля уровня good во время настройки.
+
+### 1.4. Демонстрация мастера ключа strong уровня
+![Демонстрация мастера ключа strong уровня](preview/preview_1_4.png)
+
+Показывает индикатор пароля уровня strong во время настройки.
+
+### 1.5. Демонстрация мастера ключа strong уровня
+![Демонстрация мастера ключа strong уровня](preview/preview_1_5.png)
+
+Еще один экран сильного мастер-ключа.
+
 ### 2. Окно ввода ключа для разблокировки
 ![Окно ввода ключа для разблокировки](preview/preview_2.png)
 
 Введите мастер-пароль, чтобы разблокировать ранее сохранённые аккаунты.
 
-### 3. Пустое окно при первом запуске
-![Пустое окно при первом запуске](preview/preview_3.png)
+### 3. Первый запуск, и пустое окно без кодов
+![Первый запуск, и пустое окно без кодов](preview/preview_3.png)
 
 Основное окно показывает пустое состояние до добавления аккаунтов.
 
-### 4. Окно с кодом
-![Окно с кодом](preview/preview_4.png)
+### 4. Окно с добавлением кода (без открытой вкладки advanced)
+![Окно с добавлением кода](preview/preview_4.png)
 
-Просмотрите сгенерированный TOTP-код с таймером обратного отсчёта.
+Добавление нового аккаунта на простом экране ввода.
 
-### 5. Окно с кодом и меню взаимодействия
-![Окно с кодом и меню взаимодействия](preview/preview_5.png)
+### 4.1. Окно с добавлением кода (c открытой вкладки advanced)
+![Окно с добавлением кода advanced](preview/preview_4_1.png)
 
-Откройте меню взаимодействия, чтобы изменить или удалить сохранённый аккаунт.
+Показывает экран добавления кода с открытой вкладкой advanced.
 
-### 6. Состояние после копирования кода
-![Состояние после копирования кода](preview/preview_6.png)
+### 5. Окно с кодом без открытого меню взаимодействия
+![Окно с кодом без открытого меню взаимодействия](preview/preview_5.png)
 
-Окно показывает состояние после копирования кода в буфер обмена.
+Просмотр сгенерированного TOTP-кода в основном списке.
+
+### 5.1. Окно с кодом и открытым меню взаимодействия с ним
+![Окно с кодом и открытым меню взаимодействия](preview/preview_5_1.png)
+
+Показывает меню для редактирования и удаления кода.
+
+### 6. Окно с тем как выглядит когда скопировал код
+![Окно с тем как выглядит когда скопировал код](preview/preview_6.png)
+
+Состояние после копирования кода в буфер обмена.
+
+### 7. Окно с открытым поиском по кодам
+![Окно с открытым поиском по кодам](preview/preview_7.png)
+
+Поиск по сохранённым кодам в popup.
+
+### 8. Окно с открытыми настройками и оригинальной темой
+![Окно с открытыми настройками и оригинальной темой](preview/preview_8.png)
+
+Страница настроек с выбором темы и экспортом/импортом данных.
+
+### 8.1. Окно с открытыми настройками и OLED Black темой
+![Окно с открытыми настройками и OLED Black темой](preview/preview_8_1.png)
+
+Настройки в теме OLED Black.
+
+### 8.2. Окно с открытыми настройками и White темой
+![Окно с открытыми настройками и White темой](preview/preview_8_2.png)
+
+Настройки в теме White.
 
 ---
 
@@ -216,8 +326,8 @@ Create quick access to your 2FA codes and keep your secrets protected.
 - `background.js` — сервис-воркер для хранения пароля в сессии
 - `icons/` — иконки расширения
 - `preview/` — папка со скриншотами
-- `preview/preview_1.png`, `preview/preview_2.png`, `preview/preview_3.png`, `preview/preview_4.png`, `preview/preview_5.png`, `preview/preview_6.png` — превью интерфейса
+- `preview/preview_1.png`, `preview/preview_1_1.png`, `preview/preview_1_2.png`, `preview/preview_1_3.png`, `preview/preview_1_4.png`, `preview/preview_1_5.png`, `preview/preview_2.png`, `preview/preview_3.png`, `preview/preview_4.png`, `preview/preview_4_1.png`, `preview/preview_5.png`, `preview/preview_5_1.png`, `preview/preview_6.png`, `preview/preview_7.png`, `preview/preview_8.png`, `preview/preview_8_1.png`, `preview/preview_8_2.png` — превью интерфейса
 
 ---
 
-Создавайте быстрый доступ к 2FA-кодам и храните секреты под защитой.
+Создавайте быстрый доступ к вашим 2FA-кодам и храните секреты под защитой.
