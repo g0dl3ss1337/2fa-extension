@@ -34,7 +34,7 @@
 *, *::before, *::after { box-sizing: border-box; }
 
 body {
-  width: 320px;
+  width: 340px;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background-color: var(--bg-color);
   color: var(--text-color);
@@ -273,7 +273,8 @@ body {
 .add-form input:focus,
 .add-form select:focus { border-color: var(--accent-color); }
 
-.add-form button#save-btn {
+.add-form button#save-btn,
+.add-form button.cpw-save-btn {
   background: var(--accent-color);
   color: #11111b;
   border: none;
@@ -283,7 +284,36 @@ body {
   font-weight: bold;
   transition: opacity 0.2s;
 }
-.add-form button#save-btn:hover { opacity: 0.9; }
+.add-form button#save-btn:hover,
+.add-form button.cpw-save-btn:hover { opacity: 0.9; }
+.add-form button.cpw-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+#change-pw-dialog {
+  margin-top: 0;
+  border-radius: 8px;
+  /* anim like add-form */
+  max-height: 0 !important;
+  opacity: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+  overflow: hidden;
+  pointer-events: none;
+  transition: max-height 0.3s cubic-bezier(0.4,0,0.2,1),
+              opacity 0.24s ease,
+              padding 0.3s ease,
+              margin-bottom 0.3s ease;
+}
+
+#change-pw-dialog.cpw-open {
+  max-height: 320px !important;
+  opacity: 1 !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+  margin-bottom: 0 !important;
+  overflow: visible;
+  pointer-events: auto;
+}
 
 .advanced-toggle {
   background: none;
@@ -340,10 +370,11 @@ body {
 }
 
 .settings-panel.visible {
-  max-height: 350px;
+  max-height: 900px;
   opacity: 1;
   padding: 12px;
   margin-bottom: 12px;
+  overflow: visible;
 }
 
 .settings-section-title {
@@ -417,12 +448,21 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0;
-  max-height: var(--list-max-height, 390px);
+  /* 4 cards * (64px height + 8px margin) = 288px */
+  max-height: var(--list-max-height, 288px);
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 4px;
   -webkit-overflow-scrolling: touch;
-  transition: max-height 0.3s cubic-bezier(0.4,0,0.2,1);
+  transition: max-height 0.3s cubic-bezier(0.4,0,0.2,1),
+              opacity 0.25s ease;
+}
+
+.auth-list.list-hidden {
+  max-height: 0 !important;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .empty-state {
@@ -434,10 +474,9 @@ body {
 
 .auth-card {
   background: var(--card-bg);
-  padding: 10px 12px;
+  padding: 10px 12px 10px 8px;
   border-radius: 8px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
   border-left: 4px solid var(--accent-color);
   position: relative;
@@ -477,8 +516,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  flex-grow: 1;
-  max-width: 165px;
+  flex: 0 0 auto;
+  width: 150px;
   min-width: 0;
 }
 .auth-info:hover { background: var(--input-bg); }
@@ -513,10 +552,13 @@ body {
 }
 
 .auth-actions {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-shrink: 0;
 }
 
 .dots-btn {
@@ -572,11 +614,57 @@ body {
 .edit-btn svg    { stroke: var(--accent-color); }
 .delete-btn svg  { stroke: var(--danger-color); }
 
-/* ── Timer SVG ── */
-.timer-svg { width: 24px; height: 24px; transform: rotate(-90deg); flex-shrink: 0; }
+.timer-svg {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  transform: rotate(-90deg);
+  overflow: visible;
+}
 .timer-progress { fill: none; stroke-width: 3; shape-rendering: geometricPrecision; }
 
-/* ── Delete confirm overlay ── */
+.timer-sec-text {
+  font-size: 9px;
+  font-weight: 700;
+  fill: var(--muted-color);
+  transform: rotate(90deg);
+  transform-origin: 12px 12px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  pointer-events: none;
+}
+
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  cursor: grab;
+  color: var(--border-color);
+  padding: 0 2px;
+  transition: color 0.2s;
+}
+.drag-handle:hover { color: var(--muted-color); }
+.drag-handle:active { cursor: grabbing; }
+.drag-handle svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+}
+
+.auth-card.dragging {
+  opacity: 0.45;
+  transform: scale(0.98);
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+
+.auth-card.drag-over {
+  border-left-color: var(--text-color);
+  background: var(--input-bg);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0,0,0,.35);
+}
+
 .delete-confirm {
   position: absolute;
   inset: 0;

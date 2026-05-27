@@ -316,7 +316,7 @@ function openSettings() {
   panel.classList.remove('hidden');
   requestAnimationFrame(() => {
     panel.classList.add('visible');
-    updateListHeight();
+    document.getElementById('auth-list').classList.add('list-hidden');
   });
   document.getElementById('settings-btn').classList.add('active');
 }
@@ -325,7 +325,8 @@ function closeSettings() {
   const panel = document.getElementById('settings-panel');
   panel.classList.remove('visible');
   document.getElementById('settings-btn').classList.remove('active');
-  updateListHeight();
+  document.getElementById('auth-list').classList.remove('list-hidden');
+  closeCpwDialog();
 }
 
 async function exportVault() {
@@ -491,7 +492,8 @@ function showImportPasswordDialog(payload, showMsg) {
 
 
 function updateListHeight() {
-  const BASE = 390;
+  // 4 cards * (64px + 8px margin) = 288px
+  const BASE = 288;
   let taken = 0;
 
   const settings = document.getElementById('settings-panel');
@@ -513,11 +515,44 @@ function updateListHeight() {
   document.getElementById('auth-list').style.maxHeight = val + 'px';
 }
 
+function showChangePwDialog() {
+  const dialog = document.getElementById('change-pw-dialog');
+  const isOpen = dialog.classList.contains('cpw-open');
+
+  if (isOpen) {
+    closeCpwDialog();
+  } else {
+    dialog.querySelector('#cpw-current').value = '';
+    dialog.querySelector('#cpw-new').value     = '';
+    dialog.querySelector('#cpw-confirm').value = '';
+    dialog.querySelector('#cpw-bar').style.width = '0%';
+    dialog.querySelector('#cpw-label').textContent = '';
+    dialog.querySelector('#cpw-err').classList.add('hidden');
+    const saveBtn = dialog.querySelector('#cpw-save-btn');
+    saveBtn.disabled    = false;
+    saveBtn.textContent = 'Change Password';
+
+    requestAnimationFrame(() => {
+      dialog.classList.add('cpw-open');
+      updateListHeight();
+      setTimeout(() => dialog.querySelector('#cpw-current').focus(), 50);
+    });
+  }
+}
+
+function closeCpwDialog() {
+  const dialog = document.getElementById('change-pw-dialog');
+  if (!dialog) return;
+  dialog.classList.remove('cpw-open');
+  updateListHeight();
+}
+
 function initMain() {
   showScreen('screen-main');
   renderList();
   if (rafId) cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(tick);
+  initDragAndDrop();
 
   document.getElementById('lock-btn').addEventListener('click', lockApp);
 
@@ -558,6 +593,79 @@ function initMain() {
   });
 
   document.getElementById('export-btn').addEventListener('click', exportVault);
+  document.getElementById('change-pw-btn').addEventListener('click', showChangePwDialog);
+  // pw change dialog
+  const cpwDialog = document.createElement('div');
+  cpwDialog.id        = 'change-pw-dialog';
+  cpwDialog.className = 'add-form';
+  cpwDialog.innerHTML = `
+    <input type="password" id="cpw-current"  placeholder="Current password"     autocomplete="current-password">
+    <input type="password" id="cpw-new"      placeholder="New password"         autocomplete="new-password">
+    <div class="strength-bar-wrap"><div class="strength-bar" id="cpw-bar"></div></div>
+    <span class="strength-label" id="cpw-label"></span>
+    <input type="password" id="cpw-confirm"  placeholder="Confirm new password" autocomplete="new-password">
+    <span id="cpw-err" class="form-error hidden"></span>
+    <button id="cpw-save-btn" class="cpw-save-btn">Change Password</button>
+  `;
+  document.getElementById('change-pw-btn').after(cpwDialog);
+
+  cpwDialog.querySelector('#cpw-new').addEventListener('input', (e) => {
+    const { score, label: lbl, color } = evalStrength(e.target.value);
+    const bar   = cpwDialog.querySelector('#cpw-bar');
+    const label = cpwDialog.querySelector('#cpw-label');
+    bar.style.width           = `${score * 20}%`;
+    bar.style.backgroundColor = color;
+    label.textContent         = lbl;
+    label.style.color         = color;
+  });
+
+  const doChange = async () => {
+    const currentPw = cpwDialog.querySelector('#cpw-current').value;
+    const newPw     = cpwDialog.querySelector('#cpw-new').value;
+    const confirmPw = cpwDialog.querySelector('#cpw-confirm').value;
+    const errEl     = cpwDialog.querySelector('#cpw-err');
+    const cpwBtn    = cpwDialog.querySelector('#cpw-save-btn');
+
+    if (!currentPw || !newPw || !confirmPw) { showError(errEl, 'Fill in all fields'); return; }
+    if (newPw.length < 4) { showError(errEl, 'New password must be at least 4 characters'); return; }
+    if (newPw !== confirmPw)  { showError(errEl, 'New passwords do not match'); return; }
+
+    cpwBtn.disabled    = true;
+    cpwBtn.textContent = 'Changing…';
+    errEl.classList.add('hidden');
+
+    try {
+      const { salt } = await storageGet({ salt: null });
+      const testKey  = await deriveKey(currentPw, b642buf(salt));
+      await loadAccounts(testKey);
+
+      const newSalt = randomBytes(16);
+      cryptoKey     = await deriveKey(newPw, newSalt);
+
+      await storageSet({ salt: buf2b64(newSalt) });
+      await saveAccounts();
+      await sessionSetKey(cryptoKey);
+
+      closeCpwDialog();
+
+      const msg = document.getElementById('settings-msg');
+      msg.style.color = 'var(--accent-color)';
+      msg.textContent = 'Password changed successfully';
+      msg.classList.remove('hidden');
+      setTimeout(() => msg.classList.add('hidden'), 3000);
+    } catch {
+      showError(errEl, 'Current password is incorrect');
+      cpwBtn.disabled    = false;
+      cpwBtn.textContent = 'Change Password';
+      cpwDialog.querySelector('#cpw-current').value = '';
+      cpwDialog.querySelector('#cpw-current').focus();
+    }
+  };
+
+  cpwDialog.querySelector('#cpw-save-btn').addEventListener('click', doChange);
+  cpwDialog.querySelectorAll('input').forEach((inp) => {
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') doChange(); });
+  });
 
   document.getElementById('import-btn').addEventListener('click', () => {
     document.getElementById('import-file').click();
@@ -629,6 +737,7 @@ function initMain() {
     addForm.classList.remove('visible');
     toggleBtn.textContent = '+';
     renderList();
+    setTimeout(updateListHeight, 300);
   });
 }
 
@@ -646,8 +755,16 @@ function renderList() {
     card.className     = 'auth-card';
     card.dataset.index = index;
     card.dataset.name  = acc.name;
+    card.draggable     = true;
 
     card.innerHTML = `
+      <div class="drag-handle" title="Drag to reorder">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round">
+          <line x1="8" y1="7" x2="16" y2="7"></line>
+          <line x1="8" y1="12" x2="16" y2="12"></line>
+          <line x1="8" y1="17" x2="16" y2="17"></line>
+        </svg>
+      </div>
       <div class="auth-info" data-index="${index}" title="Click to copy">
         <span class="auth-name" id="name-container-${index}">${escapeHtml(acc.name)}</span>
         <span class="auth-code" id="code-${index}">--- ---</span>
@@ -670,11 +787,14 @@ function renderList() {
           </button>
         </div>
 
-        <svg class="timer-svg">
+        <svg class="timer-svg" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="10" fill="none" stroke="var(--border-color)" stroke-width="3"></circle>
           <circle class="timer-progress" id="circle-${index}" cx="12" cy="12" r="10"
                   fill="none" stroke="var(--accent-color)" stroke-width="3"
                   stroke-dasharray="${FULL_CIRCLE_LEN}" stroke-dashoffset="0"></circle>
+          <text id="sec-${index}" x="12" y="12"
+                text-anchor="middle" dominant-baseline="central"
+                class="timer-sec-text">30</text>
         </svg>
 
         <button class="dots-btn" id="dots-${index}" data-index="${index}">⋮</button>
@@ -813,9 +933,60 @@ function closeAllMenus() {
 
 document.addEventListener('click', closeAllMenus);
 
-let lastSec     = -1;
-let lastCode    = {};
-let _intervalId = null;
+// drag-and-drop
+
+let dragSrcIndex = null;
+
+function initDragAndDrop() {
+  const list = document.getElementById('auth-list');
+
+  list.addEventListener('dragstart', (e) => {
+    const card = e.target.closest('.auth-card');
+    if (!card) return;
+    dragSrcIndex = parseInt(card.dataset.index);
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  list.addEventListener('dragend', (e) => {
+    const card = e.target.closest('.auth-card');
+    if (card) card.classList.remove('dragging');
+    list.querySelectorAll('.auth-card').forEach((c) => c.classList.remove('drag-over'));
+    dragSrcIndex = null;
+  });
+
+  list.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const card = e.target.closest('.auth-card');
+    if (!card) return;
+    list.querySelectorAll('.auth-card').forEach((c) => c.classList.remove('drag-over'));
+    const targetIndex = parseInt(card.dataset.index);
+    if (targetIndex !== dragSrcIndex) card.classList.add('drag-over');
+  });
+
+  list.addEventListener('dragleave', (e) => {
+    const card = e.target.closest('.auth-card');
+    if (card) card.classList.remove('drag-over');
+  });
+
+  list.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    const card = e.target.closest('.auth-card');
+    if (!card) return;
+    const targetIndex = parseInt(card.dataset.index);
+    if (dragSrcIndex === null || dragSrcIndex === targetIndex) return;
+
+    const moved = accounts.splice(dragSrcIndex, 1)[0];
+    accounts.splice(targetIndex, 0, moved);
+
+    await saveAccounts();
+    renderList();
+  });
+}
+
+let lastSec  = -1;
+let lastCode = {};
 
 function tick() {
   if (!accounts.length) {
@@ -823,24 +994,33 @@ function tick() {
     return;
   }
 
-  const now     = Date.now();
-  const ms      = now % 1000;
-  const sec     = Math.floor(now / 1000) % 60;
-  const period  = Math.floor(now / 1000) % 30;
-  const passed  = period + ms / 1000;
-  const remaining = 30 - passed;
-
-  const offset = (passed / 30) * FULL_CIRCLE_LEN;
-  const color  = remaining < 6 ? 'var(--danger-color)' : 'var(--accent-color)';
+  const now = Date.now();
+  const ms  = now % 1000;
+  const sec = Math.floor(now / 1000);
 
   const needCodeUpdate = sec !== lastSec;
   if (needCodeUpdate) lastSec = sec;
 
   accounts.forEach((acc, index) => {
+    const period    = acc.period || 30;
+    const passed    = (sec % period) + ms / 1000;
+    const remaining = period - passed;
+    const offset    = (passed / period) * FULL_CIRCLE_LEN;
+    const color     = remaining < 6 ? 'var(--danger-color)' : 'var(--accent-color)';
+
     const circle = document.getElementById(`circle-${index}`);
     if (circle) {
       circle.setAttribute('stroke-dashoffset', offset.toFixed(2));
       circle.setAttribute('stroke', color);
+    }
+
+    const secLabel = document.getElementById(`sec-${index}`);
+    if (secLabel) {
+      const secs = Math.ceil(remaining);
+      if (secLabel.textContent !== String(secs)) {
+        secLabel.textContent = secs;
+        secLabel.style.color = color;
+      }
     }
 
     if (needCodeUpdate) {
@@ -849,7 +1029,7 @@ function tick() {
         try {
           const opts = {
             digits:    acc.digits    || 6,
-            period:    acc.period    || 30,
+            period,
             algorithm: acc.algorithm || 'SHA1',
           };
           otplib.authenticator.options = opts;
@@ -865,8 +1045,6 @@ function tick() {
       }
     }
   });
-
-  otplib.authenticator.options = { digits: 6, period: 30, algorithm: 'SHA1' };
 
   rafId = requestAnimationFrame(tick);
 }
