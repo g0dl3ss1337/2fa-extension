@@ -1,0 +1,73 @@
+name: Build & Release Extension
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read version from manifest.json
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' manifest.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if release already exists
+        id: check_release
+        run: |
+          EXISTS=$(gh release view "v${{ steps.version.outputs.version }}" --json tagName -q '.tagName' 2>/dev/null || echo "")
+          echo "exists=$EXISTS" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build extension zip
+        if: steps.check_release.outputs.exists == ''
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          ZIP_NAME="2fa-authenticator-v${VERSION}.zip"
+
+          zip -r "$ZIP_NAME" . \
+            --exclude "*.git/*" \
+            --exclude ".github/*" \
+            --exclude "preview/*" \
+            --exclude "README.md" \
+            --exclude "*.zip"
+
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        if: steps.check_release.outputs.exists == ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          body: |
+            ## My 2FA Authenticator v${{ steps.version.outputs.version }}
+            ###[ EN ] Installation (Chrome / Chromium)
+            
+            Go to chrome://extensions/
+            Enable Developer mode
+            Click Load unpacked
+            Select the extracted extension folder
+            Done — the extension is ready to use
+            
+            ###[ RU ] Установка (Chrome / Chromium)
+            
+            Открой chrome://extensions/
+            Включи Режим разработчика
+            Нажми Загрузить распакованное расширение
+            Выбери распакованную папку с расширением
+            Готово — расширение установлено
+
+          files: ${{ env.ZIP_NAME }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

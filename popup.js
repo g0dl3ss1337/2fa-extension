@@ -1,189 +1,32 @@
-const FULL_CIRCLE_LEN = 62.83; // 2 * π * r (r=10)
-const PBKDF2_ITERATIONS = 310_000;
-const BASE32_RE = /^[A-Z2-7]+=*$/;
+import { state } from './modules/state.js';
+import { deriveKey, importKeyBytes, randomBytes, buf2b64, b642buf } from './modules/crypto.js';
+import { storageGet, storageSet, saveAccounts, loadAccounts } from './modules/storage.js';
+import { sessionSetKey, sessionGetKey, sessionClearKey } from './modules/session.js';
+import { showScreen, showError, evalStrength, updateListHeight } from './modules/ui.js';
+import { loadTheme } from './modules/theme.js';
+import { tick } from './modules/otp.js';
+import { renderList, filterCards, closeAllMenus, initDragAndDrop } from './modules/accounts.js';
+import { openSettings, closeSettings, initSettingsPanel } from './modules/settings.js';
 
-let cryptoKey = null;
-let accounts  = [];
-let rafId     = null;
+document.addEventListener('click', closeAllMenus);
 
-function buf2b64(buf) {
-  let s = '';
-  const bytes = new Uint8Array(buf);
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-  return btoa(s);
-}
+async function initSetup() {
+  showScreen('screen-setup');
 
-function b642buf(str) {
-  return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
-}
+  const input1  = document.getElementById('setup-password');
+  const input2  = document.getElementById('setup-password-confirm');
+  const btn     = document.getElementById('setup-btn');
+  const errSpan = document.getElementById('setup-error');
+  const bar     = document.getElementById('strength-bar');
+  const label   = document.getElementById('strength-label');
 
-function randomBytes(n) {
-  return crypto.getRandomValues(new Uint8Array(n));
-}
-
-async function deriveKey(password, salt) {
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey'],
-  );
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt', 'decrypt'],
-  );
-}
-
-async function exportKeyBytes(key) {
-  const raw = await crypto.subtle.exportKey('raw', key);
-  return Array.from(new Uint8Array(raw));
-}
-
-async function importKeyBytes(bytes) {
-  return crypto.subtle.importKey(
-    'raw', new Uint8Array(bytes),
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt'],
-  );
-}
-
-async function encrypt(key, plaintext) {
-  const iv  = randomBytes(12);
-  const enc = new TextEncoder();
-  const ct  = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(plaintext));
-  return { iv: buf2b64(iv), ct: buf2b64(ct) };
-}
-
-async function decrypt(key, iv, ct) {
-  const dec = new TextDecoder();
-  const pt  = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: b642buf(iv) }, key, b642buf(ct),
-  );
-  return dec.decode(pt);
-}
-
-function storageGet(keys) {
-  return new Promise((res) => chrome.storage.local.get(keys, res));
-}
-function storageSet(obj) {
-  return new Promise((res) => chrome.storage.local.set(obj, res));
-}
-
-async function saveAccounts() {
-  const json = JSON.stringify(accounts);
-  const { iv, ct } = await encrypt(cryptoKey, json);
-  await storageSet({ vault: { iv, ct } });
-}
-
-async function loadAccounts(key) {
-  const { vault } = await storageGet({ vault: null });
-  if (!vault) return [];
-  try {
-    const json = await decrypt(key, vault.iv, vault.ct);
-    return JSON.parse(json);
-  } catch {
-    throw new Error('wrong_password');
-  }
-}
-
-function sessionSetKey(key) {
-  return new Promise(async (res) => {
-    const bytes = await exportKeyBytes(key);
-    chrome.runtime.sendMessage({ type: 'SET_KEY_BYTES', bytes }, res);
-  });
-}
-
-function sessionGetKey() {
-  return new Promise((res) => {
-    chrome.runtime.sendMessage({ type: 'GET_KEY_BYTES' }, res);
-  });
-}
-
-function sessionClearKey() {
-  chrome.runtime.sendMessage({ type: 'CLEAR_KEY' });
-}
-
-function isValidBase32(secret) {
-  const s = secret.toUpperCase().replace(/\s/g, '');
-  return s.length > 0 && BASE32_RE.test(s);
-}
-
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach((s) => s.classList.add('hidden'));
-  document.getElementById(id).classList.remove('hidden');
-}
-
-function showError(el, msg) {
-  el.textContent = msg;
-  el.classList.remove('hidden');
-  setTimeout(() => el.classList.add('hidden'), 3000);
-}
-
-function escapeHtml(str) {
-  return str
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function evalStrength(pw) {
-  if (!pw) return { score: 0, label: '', color: '' };
-  let score = 0;
-  if (pw.length >= 8)  score++;
-  if (pw.length >= 12) score++;
-  if (/[A-Z]/.test(pw)) score++;
-  if (/[0-9]/.test(pw)) score++;
-  if (/[^A-Za-z0-9]/.test(pw)) score++;
-
-  if (score <= 1) return { score: 1, label: 'Weak',   color: '#f38ba8' };
-  if (score <= 2) return { score: 2, label: 'Fair',   color: '#fab387' };
-  if (score <= 3) return { score: 3, label: 'Good',   color: '#f9e2af' };
-  if (score <= 4) return { score: 4, label: 'Strong', color: '#a6e3a1' };
-  return               { score: 5, label: 'Very Strong', color: '#89dceb' };
-}
-
-function initStrengthMeter() {
-  const input = document.getElementById('setup-password');
-  const bar   = document.getElementById('strength-bar');
-  const label = document.getElementById('strength-label');
-  if (!input) return;
-
-  input.addEventListener('input', () => {
-    const { score, label: lbl, color } = evalStrength(input.value);
+  input1.addEventListener('input', () => {
+    const { score, label: lbl, color } = evalStrength(input1.value);
     bar.style.width           = `${score * 20}%`;
     bar.style.backgroundColor = color;
     label.textContent         = lbl;
     label.style.color         = color;
   });
-}
-
-const THEME_KEY = 'theme';
-
-function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme === 'original' ? '' : theme);
-  document.querySelectorAll('.theme-btn').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.theme === theme);
-  });
-}
-
-function loadTheme() {
-  chrome.storage.local.get({ [THEME_KEY]: 'original' }, (r) => applyTheme(r[THEME_KEY]));
-}
-
-function saveTheme(theme) {
-  chrome.storage.local.set({ [THEME_KEY]: theme });
-  applyTheme(theme);
-}
-
-async function initSetup() {
-  showScreen('screen-setup');
-  initStrengthMeter();
-
-  const input1   = document.getElementById('setup-password');
-  const input2   = document.getElementById('setup-password-confirm');
-  const btn      = document.getElementById('setup-btn');
-  const errSpan  = document.getElementById('setup-error');
 
   input1.addEventListener('keydown', (e) => { if (e.key === 'Enter') input2.focus(); });
   input2.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
@@ -199,13 +42,13 @@ async function initSetup() {
     btn.disabled    = true;
     btn.textContent = 'Creating…';
 
-    const salt = randomBytes(16);
-    cryptoKey  = await deriveKey(pw, salt);
-    accounts   = [];
+    const salt      = randomBytes(16);
+    state.cryptoKey = await deriveKey(pw, salt);
+    state.accounts  = [];
 
     await storageSet({ salt: buf2b64(salt), vault: null, initialized: true });
     await saveAccounts();
-    await sessionSetKey(cryptoKey);
+    await sessionSetKey(state.cryptoKey);
 
     initMain();
   });
@@ -230,12 +73,12 @@ async function initUnlock() {
     errSpan.classList.add('hidden');
 
     try {
-      const { salt } = await storageGet({ salt: null });
-      const key      = await deriveKey(pw, b642buf(salt));
-      accounts       = await loadAccounts(key);
-      cryptoKey      = key;
+      const { salt }  = await storageGet({ salt: null });
+      const key       = await deriveKey(pw, b642buf(salt));
+      state.accounts  = await loadAccounts(key);
+      state.cryptoKey = key;
 
-      await sessionSetKey(cryptoKey);
+      await sessionSetKey(state.cryptoKey);
       initMain();
     } catch {
       showError(errSpan, 'Invalid password');
@@ -248,9 +91,9 @@ async function initUnlock() {
 }
 
 function lockApp() {
-  cryptoKey = null;
-  accounts  = [];
-  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  state.cryptoKey = null;
+  state.accounts  = [];
+  if (state.rafId) { cancelAnimationFrame(state.rafId); state.rafId = null; }
 
   sessionClearKey();
 
@@ -263,7 +106,7 @@ function lockApp() {
   initUnlock();
 }
 
-let searchQuery = '';
+let searchOpen = false;
 
 function openSearch() {
   const bar = document.getElementById('search-bar');
@@ -274,6 +117,7 @@ function openSearch() {
   });
   document.getElementById('search-btn').classList.add('active');
   setTimeout(() => document.getElementById('search-input').focus(), 50);
+  searchOpen = true;
 }
 
 function closeSearch() {
@@ -282,277 +126,19 @@ function closeSearch() {
   document.getElementById('search-btn').classList.remove('active');
   document.getElementById('search-input').value = '';
   document.getElementById('search-clear').classList.add('hidden');
-  searchQuery = '';
   filterCards('');
   setTimeout(() => bar.classList.add('hidden'), 300);
   updateListHeight();
-}
-
-function filterCards(query) {
-  searchQuery = query.toLowerCase().trim();
-  document.querySelectorAll('.auth-card').forEach((card) => {
-    const name = (card.dataset.name || '').toLowerCase();
-    const match = !searchQuery || name.includes(searchQuery);
-    card.classList.toggle('search-hidden', !match);
-  });
-  // "no results" state
-  const list = document.getElementById('auth-list');
-  const visible = [...list.querySelectorAll('.auth-card:not(.search-hidden)')];
-  let noRes = list.querySelector('.no-results');
-  if (searchQuery && visible.length === 0) {
-    if (!noRes) {
-      noRes = document.createElement('div');
-      noRes.className = 'empty-state no-results';
-      noRes.textContent = 'No results';
-      list.appendChild(noRes);
-    }
-  } else if (noRes) {
-    noRes.remove();
-  }
-}
-
-function openSettings() {
-  const panel = document.getElementById('settings-panel');
-  panel.classList.remove('hidden');
-  requestAnimationFrame(() => {
-    panel.classList.add('visible');
-    document.getElementById('auth-list').classList.add('list-hidden');
-  });
-  document.getElementById('settings-btn').classList.add('active');
-}
-
-function closeSettings() {
-  const panel = document.getElementById('settings-panel');
-  panel.classList.remove('visible');
-  document.getElementById('settings-btn').classList.remove('active');
-  document.getElementById('auth-list').classList.remove('list-hidden');
-  closeCpwDialog();
-}
-
-async function exportVault() {
-  const { salt } = await storageGet({ salt: null });
-  const json = JSON.stringify(accounts, null, 2);
-  const { iv, ct } = await encrypt(cryptoKey, json);
-  const check = await encrypt(cryptoKey, 'OK');
-  const payload = JSON.stringify({
-    encrypted: true, iv, ct,
-    salt,
-    checkIv: check.iv, checkCt: check.ct,
-    version: 2,
-  });
-  const blob = new Blob([payload], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `2fa-vault-${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-async function mergeImported(imported) {
-  if (!Array.isArray(imported)) throw new Error('Bad data');
-  const existing = new Set(accounts.map((a) => a.secret));
-  let added = 0;
-  for (const acc of imported) {
-    if (acc.name && acc.secret && !existing.has(acc.secret)) {
-      accounts.push(acc);
-      existing.add(acc.secret);
-      added++;
-    }
-  }
-  await saveAccounts();
-  renderList();
-  return added;
-}
-
-async function importVault(file) {
-  const msg = document.getElementById('settings-msg');
-  const showMsg = (text, ok = false) => {
-    msg.style.color = ok ? 'var(--accent-color)' : 'var(--danger-color)';
-    msg.textContent = text;
-    msg.classList.remove('hidden');
-    if (ok) setTimeout(() => msg.classList.add('hidden'), 3000);
-  };
-
-  let payload;
-  try {
-    payload = JSON.parse(await file.text());
-  } catch {
-    showMsg('Import failed: invalid JSON');
-    return;
-  }
-
-  if (Array.isArray(payload)) {
-    try {
-      const added = await mergeImported(payload);
-      showMsg(`Imported ${added} account(s)`, true);
-    } catch (e) { showMsg(`Import failed: ${e.message}`); }
-    return;
-  }
-
-  if (!payload.encrypted || !payload.iv || !payload.ct) {
-    showMsg('Import failed: unknown format');
-    return;
-  }
-
-  // V2: file contains its own salt
-  if (payload.version === 2 && payload.salt) {
-    const fileSalt = payload.salt;
-    const { salt: currentSalt } = await storageGet({ salt: null });
-
-    // Same salt = same key, try directly
-    if (fileSalt === currentSalt) {
-      try {
-        const json = await decrypt(cryptoKey, payload.iv, payload.ct);
-        const added = await mergeImported(JSON.parse(json));
-        showMsg(`Imported ${added} account(s)`, true);
-      } catch {
-        showMsg('Import failed: decryption error');
-      }
-      return;
-    }
-
-    // Different salt = different password -> ask user for the old password 
-    showImportPasswordDialog(payload, showMsg);
-    return;
-  }
-
-  // V1 (no salt in file): try current key/salt first
-  try {
-    const json = await decrypt(cryptoKey, payload.iv, payload.ct);
-    const added = await mergeImported(JSON.parse(json));
-    showMsg(`Imported ${added} account(s)`, true);
-    return;
-  } catch { /* wrong key, ask for password */ }
-
-  showImportPasswordDialog(payload, showMsg);
-}
-
-function showImportPasswordDialog(payload, showMsg) {
-  const old = document.getElementById('import-pw-dialog');
-  if (old) old.remove();
-
-  const dialog = document.createElement('div');
-  dialog.id = 'import-pw-dialog';
-  dialog.className = 'import-pw-dialog';
-  dialog.innerHTML = `
-    <p class="import-pw-label">This vault was encrypted with a different password.<br>Enter the original password to import:</p>
-    <div class="import-pw-row">
-      <input type="password" id="import-pw-input" placeholder="Original password" autocomplete="off">
-      <button id="import-pw-btn">Unlock</button>
-    </div>
-    <span id="import-pw-err" class="form-error hidden"></span>
-  `;
-
-  const importBtn = document.getElementById('import-btn');
-  importBtn.after(dialog);
-  updateListHeight();
-  document.getElementById('import-pw-input').focus();
-
-  const doUnlock = async () => {
-    const pw = document.getElementById('import-pw-input').value;
-    if (!pw) return;
-    const errEl = document.getElementById('import-pw-err');
-    const btn   = document.getElementById('import-pw-btn');
-    btn.disabled = true;
-    btn.textContent = '…';
-    errEl.classList.add('hidden');
-
-    try {
-      // Find key using the salt from the file (v2) or current salt (v1)
-      const saltB64 = payload.salt || (await storageGet({ salt: null })).salt;
-      const key = await deriveKey(pw, b642buf(saltB64));
-
-      // If file has a verifier, check it first
-      if (payload.checkIv && payload.checkCt) {
-        const check = await decrypt(key, payload.checkIv, payload.checkCt);
-        if (check !== 'OK') throw new Error('bad password');
-      }
-
-      const json  = await decrypt(key, payload.iv, payload.ct);
-      const added = await mergeImported(JSON.parse(json));
-      dialog.remove();
-      updateListHeight();
-      showMsg(`Imported ${added} account(s)`, true);
-    } catch {
-      errEl.textContent = 'Wrong password';
-      errEl.classList.remove('hidden');
-      btn.disabled = false;
-      btn.textContent = 'Unlock';
-      document.getElementById('import-pw-input').value = '';
-      document.getElementById('import-pw-input').focus();
-    }
-  };
-
-  document.getElementById('import-pw-btn').addEventListener('click', doUnlock);
-  document.getElementById('import-pw-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') doUnlock();
-  });
-}
-
-
-function updateListHeight() {
-  // 4 cards * (64px + 8px margin) = 288px
-  const BASE = 288;
-  let taken = 0;
-
-  const settings = document.getElementById('settings-panel');
-  if (settings && settings.classList.contains('visible')) {
-    taken += settings.scrollHeight + 12;
-  }
-
-  const addForm = document.getElementById('add-form');
-  if (addForm && addForm.classList.contains('visible')) {
-    taken += addForm.scrollHeight + 12;
-  }
-
-  const searchBar = document.getElementById('search-bar');
-  if (searchBar && searchBar.classList.contains('visible')) {
-    taken += 44;
-  }
-
-  const val = Math.max(64, BASE - taken);
-  document.getElementById('auth-list').style.maxHeight = val + 'px';
-}
-
-function showChangePwDialog() {
-  const dialog = document.getElementById('change-pw-dialog');
-  const isOpen = dialog.classList.contains('cpw-open');
-
-  if (isOpen) {
-    closeCpwDialog();
-  } else {
-    dialog.querySelector('#cpw-current').value = '';
-    dialog.querySelector('#cpw-new').value     = '';
-    dialog.querySelector('#cpw-confirm').value = '';
-    dialog.querySelector('#cpw-bar').style.width = '0%';
-    dialog.querySelector('#cpw-label').textContent = '';
-    dialog.querySelector('#cpw-err').classList.add('hidden');
-    const saveBtn = dialog.querySelector('#cpw-save-btn');
-    saveBtn.disabled    = false;
-    saveBtn.textContent = 'Change Password';
-
-    requestAnimationFrame(() => {
-      dialog.classList.add('cpw-open');
-      updateListHeight();
-      setTimeout(() => dialog.querySelector('#cpw-current').focus(), 50);
-    });
-  }
-}
-
-function closeCpwDialog() {
-  const dialog = document.getElementById('change-pw-dialog');
-  if (!dialog) return;
-  dialog.classList.remove('cpw-open');
-  updateListHeight();
+  searchOpen = false;
 }
 
 function initMain() {
   showScreen('screen-main');
   renderList();
-  if (rafId) cancelAnimationFrame(rafId);
-  rafId = requestAnimationFrame(tick);
+  if (state.rafId) cancelAnimationFrame(state.rafId);
+  state.rafId = requestAnimationFrame(tick);
   initDragAndDrop();
+  initSettingsPanel();
 
   document.getElementById('lock-btn').addEventListener('click', lockApp);
 
@@ -561,9 +147,8 @@ function initMain() {
   const searchClear = document.getElementById('search-clear');
 
   searchBtn.addEventListener('click', () => {
-    const bar = document.getElementById('search-bar');
-    if (bar.classList.contains('visible')) closeSearch();
-    else openSearch();
+    if (searchOpen) closeSearch();
+    else            openSearch();
   });
 
   searchInput.addEventListener('input', () => {
@@ -579,110 +164,20 @@ function initMain() {
     searchInput.focus();
   });
 
-  const settingsBtn = document.getElementById('settings-btn');
-  settingsBtn.addEventListener('click', () => {
+  document.getElementById('settings-btn').addEventListener('click', () => {
     const panel = document.getElementById('settings-panel');
     if (panel.classList.contains('visible')) closeSettings();
-    else openSettings();
+    else                                     openSettings();
   });
 
-  document.querySelectorAll('.theme-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      saveTheme(btn.dataset.theme);
-    });
-  });
-
-  document.getElementById('export-btn').addEventListener('click', exportVault);
-  document.getElementById('change-pw-btn').addEventListener('click', showChangePwDialog);
-  // pw change dialog
-  const cpwDialog = document.createElement('div');
-  cpwDialog.id        = 'change-pw-dialog';
-  cpwDialog.className = 'add-form';
-  cpwDialog.innerHTML = `
-    <input type="password" id="cpw-current"  placeholder="Current password"     autocomplete="current-password">
-    <input type="password" id="cpw-new"      placeholder="New password"         autocomplete="new-password">
-    <div class="strength-bar-wrap"><div class="strength-bar" id="cpw-bar"></div></div>
-    <span class="strength-label" id="cpw-label"></span>
-    <input type="password" id="cpw-confirm"  placeholder="Confirm new password" autocomplete="new-password">
-    <span id="cpw-err" class="form-error hidden"></span>
-    <button id="cpw-save-btn" class="cpw-save-btn">Change Password</button>
-  `;
-  document.getElementById('change-pw-btn').after(cpwDialog);
-
-  cpwDialog.querySelector('#cpw-new').addEventListener('input', (e) => {
-    const { score, label: lbl, color } = evalStrength(e.target.value);
-    const bar   = cpwDialog.querySelector('#cpw-bar');
-    const label = cpwDialog.querySelector('#cpw-label');
-    bar.style.width           = `${score * 20}%`;
-    bar.style.backgroundColor = color;
-    label.textContent         = lbl;
-    label.style.color         = color;
-  });
-
-  const doChange = async () => {
-    const currentPw = cpwDialog.querySelector('#cpw-current').value;
-    const newPw     = cpwDialog.querySelector('#cpw-new').value;
-    const confirmPw = cpwDialog.querySelector('#cpw-confirm').value;
-    const errEl     = cpwDialog.querySelector('#cpw-err');
-    const cpwBtn    = cpwDialog.querySelector('#cpw-save-btn');
-
-    if (!currentPw || !newPw || !confirmPw) { showError(errEl, 'Fill in all fields'); return; }
-    if (newPw.length < 4) { showError(errEl, 'New password must be at least 4 characters'); return; }
-    if (newPw !== confirmPw)  { showError(errEl, 'New passwords do not match'); return; }
-
-    cpwBtn.disabled    = true;
-    cpwBtn.textContent = 'Changing…';
-    errEl.classList.add('hidden');
-
-    try {
-      const { salt } = await storageGet({ salt: null });
-      const testKey  = await deriveKey(currentPw, b642buf(salt));
-      await loadAccounts(testKey);
-
-      const newSalt = randomBytes(16);
-      cryptoKey     = await deriveKey(newPw, newSalt);
-
-      await storageSet({ salt: buf2b64(newSalt) });
-      await saveAccounts();
-      await sessionSetKey(cryptoKey);
-
-      closeCpwDialog();
-
-      const msg = document.getElementById('settings-msg');
-      msg.style.color = 'var(--accent-color)';
-      msg.textContent = 'Password changed successfully';
-      msg.classList.remove('hidden');
-      setTimeout(() => msg.classList.add('hidden'), 3000);
-    } catch {
-      showError(errEl, 'Current password is incorrect');
-      cpwBtn.disabled    = false;
-      cpwBtn.textContent = 'Change Password';
-      cpwDialog.querySelector('#cpw-current').value = '';
-      cpwDialog.querySelector('#cpw-current').focus();
-    }
-  };
-
-  cpwDialog.querySelector('#cpw-save-btn').addEventListener('click', doChange);
-  cpwDialog.querySelectorAll('input').forEach((inp) => {
-    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') doChange(); });
-  });
-
-  document.getElementById('import-btn').addEventListener('click', () => {
-    document.getElementById('import-file').click();
-  });
-  document.getElementById('import-file').addEventListener('change', (e) => {
-    if (e.target.files[0]) importVault(e.target.files[0]);
-    e.target.value = '';
-  });
-
-  const toggleBtn  = document.getElementById('toggle-add-btn');
-  const addForm    = document.getElementById('add-form');
-  const saveBtn    = document.getElementById('save-btn');
-  const nameInput  = document.getElementById('new-name');
+  const toggleBtn   = document.getElementById('toggle-add-btn');
+  const addForm     = document.getElementById('add-form');
+  const saveBtn     = document.getElementById('save-btn');
+  const nameInput   = document.getElementById('new-name');
   const secretInput = document.getElementById('new-secret');
-  const secretErr  = document.getElementById('secret-error');
-  const advToggle  = document.getElementById('advanced-toggle');
-  const advFields  = document.getElementById('advanced-fields');
+  const secretErr   = document.getElementById('secret-error');
+  const advToggle   = document.getElementById('advanced-toggle');
+  const advFields   = document.getElementById('advanced-fields');
 
   toggleBtn.addEventListener('click', () => {
     const isOpen = addForm.classList.contains('visible');
@@ -718,7 +213,12 @@ function initMain() {
     const digits    = parseInt(document.getElementById('new-digits').value);
 
     if (!name || !secret) { showError(secretErr, 'Fill in all fields'); return; }
-    if (!isValidBase32(secret)) { showError(secretErr, 'Invalid Base32 key'); return; }
+
+    const s = secret.toUpperCase().replace(/\s/g, '');
+    if (!s.length || !/^[A-Z2-7]+=*$/.test(s)) {
+      showError(secretErr, 'Invalid Base32 key');
+      return;
+    }
 
     try {
       otplib.authenticator.generate(secret);
@@ -727,7 +227,7 @@ function initMain() {
       return;
     }
 
-    accounts.push({ name, secret, period, algorithm, digits });
+    state.accounts.push({ name, secret, period, algorithm, digits });
     await saveAccounts();
 
     nameInput.value   = '';
@@ -737,316 +237,8 @@ function initMain() {
     addForm.classList.remove('visible');
     toggleBtn.textContent = '+';
     renderList();
-    setTimeout(updateListHeight, 300);
+    setTimeout(updateListHeight, 320);
   });
-}
-
-function renderList() {
-  const authList = document.getElementById('auth-list');
-  authList.innerHTML = '';
-
-  if (accounts.length === 0) {
-    authList.innerHTML = '<div class="empty-state">No codes added yet</div>';
-    return;
-  }
-
-  accounts.forEach((acc, index) => {
-    const card = document.createElement('div');
-    card.className     = 'auth-card';
-    card.dataset.index = index;
-    card.dataset.name  = acc.name;
-    card.draggable     = true;
-
-    card.innerHTML = `
-      <div class="drag-handle" title="Drag to reorder">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round">
-          <line x1="8" y1="7" x2="16" y2="7"></line>
-          <line x1="8" y1="12" x2="16" y2="12"></line>
-          <line x1="8" y1="17" x2="16" y2="17"></line>
-        </svg>
-      </div>
-      <div class="auth-info" data-index="${index}" title="Click to copy">
-        <span class="auth-name" id="name-container-${index}">${escapeHtml(acc.name)}</span>
-        <span class="auth-code" id="code-${index}">--- ---</span>
-      </div>
-      <div class="auth-actions">
-        <div class="action-icons-container">
-          <button class="icon-btn delete-btn" data-index="${index}" title="Delete">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="3 6 5 6 21 6"></polyline>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              <line x1="10" y1="11" x2="10" y2="17"></line>
-              <line x1="14" y1="11" x2="14" y2="17"></line>
-            </svg>
-          </button>
-          <button class="icon-btn edit-btn" data-index="${index}" title="Rename">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-          </button>
-        </div>
-
-        <svg class="timer-svg" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="10" fill="none" stroke="var(--border-color)" stroke-width="3"></circle>
-          <circle class="timer-progress" id="circle-${index}" cx="12" cy="12" r="10"
-                  fill="none" stroke="var(--accent-color)" stroke-width="3"
-                  stroke-dasharray="${FULL_CIRCLE_LEN}" stroke-dashoffset="0"></circle>
-          <text id="sec-${index}" x="12" y="12"
-                text-anchor="middle" dominant-baseline="central"
-                class="timer-sec-text">30</text>
-        </svg>
-
-        <button class="dots-btn" id="dots-${index}" data-index="${index}">⋮</button>
-      </div>
-
-      <div class="delete-confirm hidden" id="delete-confirm-${index}">
-        <span>Delete «${escapeHtml(acc.name)}»?</span>
-        <div class="delete-confirm-btns">
-          <button class="confirm-yes" data-index="${index}">Yes</button>
-          <button class="confirm-no"  data-index="${index}">No</button>
-        </div>
-      </div>
-    `;
-
-    authList.appendChild(card);
-  });
-
-  attachCardEvents();
-
-  if (searchQuery) filterCards(searchQuery);
-}
-
-function attachCardEvents() {
-  document.querySelectorAll('.auth-info').forEach((zone) => {
-    zone.addEventListener('click', (e) => {
-      if (e.target.tagName === 'INPUT') return;
-      const idx      = zone.getAttribute('data-index');
-      const codeSpan = document.getElementById(`code-${idx}`);
-      if (codeSpan.dataset.copying === '1') return;
-
-      const cleanCode = codeSpan.textContent.replace(/\s/g, '');
-      if (!cleanCode || cleanCode === '------') return;
-
-      navigator.clipboard.writeText(cleanCode);
-
-      codeSpan.dataset.copying = '1';
-      const prev = codeSpan.textContent;
-      codeSpan.textContent = 'Copied!';
-      codeSpan.style.color = 'var(--accent-color)';
-
-      setTimeout(() => {
-        codeSpan.style.color = '';
-        codeSpan.textContent = prev;
-        delete codeSpan.dataset.copying;
-      }, 2000);
-    });
-  });
-
-  // Dots menu
-  document.querySelectorAll('.dots-btn').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const card   = btn.closest('.auth-card');
-      const isOpen = card.classList.contains('show-actions');
-      closeAllMenus();
-      if (!isOpen) {
-        card.classList.add('show-actions');
-        btn.classList.add('active');
-      }
-    });
-  });
-
-  // Edit name
-  document.querySelectorAll('.edit-btn').forEach((btn) => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const idx           = parseInt(btn.getAttribute('data-index'));
-      const nameContainer = document.getElementById(`name-container-${idx}`);
-      if (nameContainer.querySelector('input')) return;
-
-      const currentName = accounts[idx].name;
-      const input       = document.createElement('input');
-      input.type        = 'text';
-      input.className   = 'edit-name-input';
-      input.value       = currentName;
-
-      nameContainer.innerHTML = '';
-      nameContainer.appendChild(input);
-      input.focus();
-      input.select();
-
-      const commit = async () => {
-        const value = input.value.trim();
-        if (value && value !== currentName) {
-          accounts[idx].name          = value;
-          const card = nameContainer.closest('.auth-card');
-          if (card) card.dataset.name = value;
-          await saveAccounts();
-          renderList();
-        } else {
-          nameContainer.textContent = currentName;
-        }
-      };
-
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter')  { e.preventDefault(); commit(); }
-        if (e.key === 'Escape') nameContainer.textContent = currentName;
-      });
-      input.addEventListener('blur', commit);
-    });
-  });
-
-  document.querySelectorAll('.delete-btn').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const idx     = parseInt(btn.getAttribute('data-index'));
-      const confirm = document.getElementById(`delete-confirm-${idx}`);
-      confirm.classList.remove('hidden');
-    });
-  });
-
-  document.querySelectorAll('.confirm-yes').forEach((btn) => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const idx = parseInt(btn.getAttribute('data-index'));
-      accounts.splice(idx, 1);
-      await saveAccounts();
-      renderList();
-    });
-  });
-
-  document.querySelectorAll('.confirm-no').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const idx     = parseInt(btn.getAttribute('data-index'));
-      const confirm = document.getElementById(`delete-confirm-${idx}`);
-      confirm.classList.add('hidden');
-    });
-  });
-}
-
-function closeAllMenus() {
-  document.querySelectorAll('.auth-card').forEach((c) => c.classList.remove('show-actions'));
-  document.querySelectorAll('.dots-btn').forEach((b)  => b.classList.remove('active'));
-}
-
-document.addEventListener('click', closeAllMenus);
-
-// drag-and-drop
-
-let dragSrcIndex = null;
-
-function initDragAndDrop() {
-  const list = document.getElementById('auth-list');
-
-  list.addEventListener('dragstart', (e) => {
-    const card = e.target.closest('.auth-card');
-    if (!card) return;
-    dragSrcIndex = parseInt(card.dataset.index);
-    card.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-  });
-
-  list.addEventListener('dragend', (e) => {
-    const card = e.target.closest('.auth-card');
-    if (card) card.classList.remove('dragging');
-    list.querySelectorAll('.auth-card').forEach((c) => c.classList.remove('drag-over'));
-    dragSrcIndex = null;
-  });
-
-  list.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    const card = e.target.closest('.auth-card');
-    if (!card) return;
-    list.querySelectorAll('.auth-card').forEach((c) => c.classList.remove('drag-over'));
-    const targetIndex = parseInt(card.dataset.index);
-    if (targetIndex !== dragSrcIndex) card.classList.add('drag-over');
-  });
-
-  list.addEventListener('dragleave', (e) => {
-    const card = e.target.closest('.auth-card');
-    if (card) card.classList.remove('drag-over');
-  });
-
-  list.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    const card = e.target.closest('.auth-card');
-    if (!card) return;
-    const targetIndex = parseInt(card.dataset.index);
-    if (dragSrcIndex === null || dragSrcIndex === targetIndex) return;
-
-    const moved = accounts.splice(dragSrcIndex, 1)[0];
-    accounts.splice(targetIndex, 0, moved);
-
-    await saveAccounts();
-    renderList();
-  });
-}
-
-let lastSec  = -1;
-let lastCode = {};
-
-function tick() {
-  if (!accounts.length) {
-    rafId = requestAnimationFrame(tick);
-    return;
-  }
-
-  const now = Date.now();
-  const ms  = now % 1000;
-  const sec = Math.floor(now / 1000);
-
-  const needCodeUpdate = sec !== lastSec;
-  if (needCodeUpdate) lastSec = sec;
-
-  accounts.forEach((acc, index) => {
-    const period    = acc.period || 30;
-    const passed    = (sec % period) + ms / 1000;
-    const remaining = period - passed;
-    const offset    = (passed / period) * FULL_CIRCLE_LEN;
-    const color     = remaining < 6 ? 'var(--danger-color)' : 'var(--accent-color)';
-
-    const circle = document.getElementById(`circle-${index}`);
-    if (circle) {
-      circle.setAttribute('stroke-dashoffset', offset.toFixed(2));
-      circle.setAttribute('stroke', color);
-    }
-
-    const secLabel = document.getElementById(`sec-${index}`);
-    if (secLabel) {
-      const secs = Math.ceil(remaining);
-      if (secLabel.textContent !== String(secs)) {
-        secLabel.textContent = secs;
-        secLabel.style.color = color;
-      }
-    }
-
-    if (needCodeUpdate) {
-      const codeSpan = document.getElementById(`code-${index}`);
-      if (codeSpan && !codeSpan.dataset.copying) {
-        try {
-          const opts = {
-            digits:    acc.digits    || 6,
-            period,
-            algorithm: acc.algorithm || 'SHA1',
-          };
-          otplib.authenticator.options = opts;
-          const code = otplib.authenticator.generate(acc.secret);
-          const fmt  = code.length === 6
-            ? code.slice(0, 3) + ' ' + code.slice(3)
-            : code.slice(0, 4) + ' ' + code.slice(4);
-          if (codeSpan.textContent !== fmt) codeSpan.textContent = fmt;
-          lastCode[index] = fmt;
-        } catch {
-          codeSpan.textContent = 'Error';
-        }
-      }
-    }
-  });
-
-  rafId = requestAnimationFrame(tick);
 }
 
 (async () => {
@@ -1070,8 +262,8 @@ function tick() {
 
   if (sessionResponse && sessionResponse.bytes) {
     try {
-      cryptoKey = await importKeyBytes(sessionResponse.bytes);
-      accounts  = await loadAccounts(cryptoKey);
+      state.cryptoKey = await importKeyBytes(sessionResponse.bytes);
+      state.accounts  = await loadAccounts(state.cryptoKey);
       initMain();
       return;
     } catch (e) {

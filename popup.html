@@ -168,12 +168,13 @@
       </button>
       <input type="file" id="import-file" accept=".json" class="hidden">
       <span id="settings-msg" class="form-error hidden" style="color:var(--accent-color)"></span>
+      <div class="settings-section-title" id="settings-version">Version x.xx</div>
     </div>
 
     <div id="auth-list" class="auth-list"></div>
   </div>
 
   <script src="otplib-browser.js"></script>
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>
