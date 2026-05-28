@@ -50,7 +50,7 @@ jobs:
           name: v${{ steps.version.outputs.version }}
           body: |
             ## My 2FA Authenticator v${{ steps.version.outputs.version }}
-            ###[ EN ] Installation (Chrome / Chromium)
+            ### [ EN ] Installation (Chrome / Chromium)
             
             Go to chrome://extensions/
             Enable Developer mode
@@ -58,7 +58,7 @@ jobs:
             Select the extracted extension folder
             Done — the extension is ready to use
             
-            ###[ RU ] Установка (Chrome / Chromium)
+            ### [ RU ] Установка (Chrome / Chromium)
             
             Открой chrome://extensions/
             Включи Режим разработчика
